@@ -10,19 +10,22 @@
 
 @layer base {
   body {
-    @apply bg-near-black text-white antialiased;
+    @apply bg-near-black text-white antialiased transition-colors duration-300;
   }
 }
 
-/* Light Mode Overrides (when isLightMode is true) */
-body.light-mode {
+/* Light Mode Overrides (Only applies when .light-mode class is present on the wrapper) */
+.light-mode {
   background-color: #F8FAFC !important;
+  color: #1A1A1A !important;
 }
+
 .light-mode .bg-near-black,
 .light-mode .bg-near-black\/95 {
   background-color: #F8FAFC !important;
   color: #1A1A1A !important;
 }
+
 .light-mode .text-white,
 .light-mode .text-white\/80,
 .light-mode .text-white\/70,
@@ -30,54 +33,32 @@ body.light-mode {
 .light-mode .text-white\/40 {
   color: #1A1A1A !important;
 }
+
 .light-mode .border-white\/20,
 .light-mode .border-white\/10,
 .light-mode .border-white\/5 {
-  border-color: rgba(0, 0, 0, 0.2) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
 }
+
 .light-mode .bg-white\/10,
 .light-mode .bg-white\/5 {
   background-color: rgba(0, 0, 0, 0.05) !important;
 }
 
-/* Dark Mode Overrides (for naturally light components when isLightMode is false) */
-body:not(.light-mode) .bg-white,
-body:not(.light-mode) .bg-slate-50,
-body:not(.light-mode) .bg-slate-200 {
-  background-color: #1A1A1A !important;
-}
-body:not(.light-mode) .text-near-black,
-body:not(.light-mode) .text-slate-800,
-body:not(.light-mode) .text-slate-900,
-body:not(.light-mode) .text-slate-700 {
-  color: #FFFFFF !important;
-}
-body:not(.light-mode) .text-slate-600,
-body:not(.light-mode) .text-slate-500 {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-body:not(.light-mode) .border-slate-200,
-body:not(.light-mode) .border-slate-300 {
-  border-color: rgba(255, 255, 255, 0.1) !important;
+/* Ensure sections that were originally white stay white or adjust appropriately */
+.light-mode .bg-white {
+  background-color: #FFFFFF !important;
 }
 
-/* Fix CV Maker in dark mode */
-body:not(.light-mode) .cv-page {
-  background-color: #FFFFFF !important; /* CV should remain white printable format */
-  color: #1A1A1A !important;
-}
-body:not(.light-mode) .cv-page .text-slate-800,
-body:not(.light-mode) .cv-page .text-near-black {
-  color: #1A1A1A !important; /* CV text stays dark */
-}
-
+/* Print Styles */
 @media print {
   .no-print {
     display: none !important;
   }
-  body, body:not(.light-mode) {
+  body {
     background: white !important;
     padding: 0 !important;
+    color: black !important;
   }
   @page {
     size: A4;
@@ -100,9 +81,14 @@ body:not(.light-mode) .cv-page .text-near-black {
   }
 }
 
+/* Utility Classes */
 .grid-overlay {
   background-image: radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
   background-size: 24px 24px;
+}
+
+.light-mode .grid-overlay {
+  background-image: radial-gradient(circle at 2px 2px, rgba(0, 0, 0, 0.05) 1px, transparent 0);
 }
 
 .sharp-frame {

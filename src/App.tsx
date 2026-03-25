@@ -1237,7 +1237,7 @@ export default function App() {
   const isBrandPage = ['brand-home', 'brand-services'].includes(currentPage);
 
   return (
-    <div className={`min-h-screen font-sans bg-white ${isLightMode ? 'light-mode' : ''}`}>
+    <div className={`min-h-screen font-sans bg-near-black ${isLightMode ? 'light-mode' : ''}`}>
       {/* Navbar */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-500 no-print ${isScrolled || currentPage !== 'brand-home' ? 'bg-near-black/95 backdrop-blur-md py-4 shadow-lg border-b border-white/5' : 'bg-transparent py-8'}`}>
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
