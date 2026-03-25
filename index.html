@@ -10,6 +10,34 @@
     <link rel="canonical" href="https://chandeepa-vidusara.github.io/" />
     <link rel="icon" type="image/png" href="https://media.licdn.com/dms/image/v2/D5603AQHi4U2qZOS40Q/profile-displayphoto-shrink_400_400/B56Zkvg8OYHMAk-/0/1757438789898?e=1776297600&v=beta&t=yVS-v7nC8g-thZoamRpI4ZoyNTOuxGEomCeXJd0SzGc" />
     
+    <!-- Add global error catcher to diagnose white screen -->
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        var errDiv = document.createElement('div');
+        errDiv.style.padding = '20px';
+        errDiv.style.background = 'red';
+        errDiv.style.color = 'white';
+        errDiv.style.position = 'fixed';
+        errDiv.style.top = '0';
+        errDiv.style.left = '0';
+        errDiv.style.zIndex = '999999';
+        errDiv.innerHTML = '<h2>RUNTIME CRASH:</h2><p>' + msg + '</p><pre>' + (error && error.stack ? error.stack : '') + '</pre>';
+        document.body.appendChild(errDiv);
+        return false;
+      };
+      window.onunhandledrejection = function(event) {
+        var errDiv = document.createElement('div');
+        errDiv.style.padding = '20px';
+        errDiv.style.background = 'orange';
+        errDiv.style.color = 'black';
+        errDiv.style.position = 'fixed';
+        errDiv.style.top = '50%';
+        errDiv.style.left = '0';
+        errDiv.style.zIndex = '999999';
+        errDiv.innerHTML = '<h2>UNHANDLED PROMISE REJECTION:</h2><p>' + event.reason + '</p>';
+        document.body.appendChild(errDiv);
+      };
+    </script>
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://chandeepa-vidusara.github.io/" />
