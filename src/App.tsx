@@ -13,7 +13,6 @@ import {
 import { PortfolioData, Language, Project, Page, Post } from './types';
 import { DEFAULT_DATA, TRANSLATIONS } from './constants';
 import { savePortfolioData, subscribeToPortfolioData, auth, logGeneratedCV, subscribeToGeneratedCVs } from './firebase';
-import { GoogleGenAI } from '@google/genai';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 // Helper to convert Google Drive links to embeddable preview links
@@ -65,19 +64,32 @@ const CVMaker = () => {
     try {
       const apiKey = process.env.GEMINI_API_KEY || '';
       if (!apiKey) throw new Error("Gemini API key is missing in environment variables.");
-      const genAI = new GoogleGenAI({ apiKey });
-      const response = await genAI.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: promptText,
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptText }] }]
+        })
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const responseData = await response.json();
+      const textResult = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      if (!textResult) throw new Error("Invalid response format from Gemini");
       
       const today = new Date().toDateString();
       const newCredits = aiCredits - 1;
       setAiCredits(newCredits);
       localStorage.setItem(`cvk_ai_credits_${today}`, newCredits.toString());
       
-      return response.text;
+      return textResult;
     } catch (e: any) {
+      console.error(e);
       alert("AI Generation failed. Check API key or connection. Error: " + e.message);
       return null;
     } finally {
