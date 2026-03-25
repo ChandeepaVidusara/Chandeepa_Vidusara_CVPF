@@ -7,11 +7,14 @@ import {
   Image as ImageIcon, Video, User, Briefcase, FileText,
   Linkedin, Check, ThumbsUp, MessageSquare, Share2,
   Download, Printer, Layout, Type, UserCircle, History,
-  BookOpen, Wrench, Languages, Heart, Cpu, Home, Lock, Eye, EyeOff
+  BookOpen, Wrench, Languages, Heart, Cpu, Home, Lock, Eye, EyeOff, Sun, Moon,
+  ChevronRight, Github, Search
 } from 'lucide-react';
 import { PortfolioData, Language, Project, Page, Post } from './types';
 import { DEFAULT_DATA, TRANSLATIONS } from './constants';
-import { savePortfolioData, subscribeToPortfolioData, auth } from './firebase';
+import { savePortfolioData, subscribeToPortfolioData, auth, logGeneratedCV, subscribeToGeneratedCVs } from './firebase';
+import { GoogleGenAI } from '@google/genai';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 // Helper to convert Google Drive links to embeddable preview links
 const getGoogleDriveEmbedUrl = (url: string) => {
@@ -46,6 +49,99 @@ const CVMaker = () => {
   const [viewMode, setViewMode] = useState<'editor' | 'preview'>('editor');
   const [zoom, setZoom] = useState(0.75);
   const [themeColor, setThemeColor] = useState('#FF6321');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiCredits, setAiCredits] = useState(() => {
+    const today = new Date().toDateString();
+    const stored = localStorage.getItem(`cvk_ai_credits_${today}`);
+    return stored ? parseInt(stored) : 3;
+  });
+
+  const generateWithAI = async (promptText: string): Promise<string | null> => {
+    if (aiCredits <= 0) {
+      alert("Daily AI limit reached (3/3). Please try again tomorrow!");
+      return null;
+    }
+    setAiLoading(true);
+    try {
+      const apiKey = process.env.GEMINI_API_KEY || '';
+      if (!apiKey) throw new Error("Gemini API key is missing in environment variables.");
+      const genAI = new GoogleGenAI({ apiKey });
+      const response = await genAI.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: promptText,
+      });
+      
+      const today = new Date().toDateString();
+      const newCredits = aiCredits - 1;
+      setAiCredits(newCredits);
+      localStorage.setItem(`cvk_ai_credits_${today}`, newCredits.toString());
+      
+      return response.text;
+    } catch (e: any) {
+      alert("AI Generation failed. Check API key or connection. Error: " + e.message);
+      return null;
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const smartImportCV = async () => {
+    const rawText = prompt("Paste your plain text CV here (minimum 50 characters). The AI will analyze it and auto-fill the form:");
+    if (!rawText || rawText.length < 50) return;
+
+    const dataPrompt = `
+      Extract the following information from the provided CV text into a strict JSON format matching this schema exactly:
+      {
+        "personal": { "name": "", "title": "", "email": "", "phone": "", "location": "", "linkedin": "", "summary": "" },
+        "experience": [{ "company": "", "role": "", "period": "", "description": "" }],
+        "education": [{ "school": "", "degree": "", "period": "", "description": "" }],
+        "skills": ["skill1", "skill2"],
+        "languages": ["lang1"],
+        "certifications": ["cert1"]
+      }
+      If any field is missing, leave it as an empty string. Output ONLY raw JSON, do not include markdown blocks like \`\`\`json.
+      CV TEXT:
+      ${rawText}
+    `;
+
+    const result = await generateWithAI(dataPrompt);
+    if (!result) return;
+    try {
+      const cleanedResult = result.replace(/```json|```/gi, '').trim();
+      const parsed = JSON.parse(cleanedResult);
+      if (parsed.experience) parsed.experience.forEach((e: any) => e.id = Date.now().toString() + Math.random());
+      if (parsed.education) parsed.education.forEach((e: any) => e.id = Date.now().toString() + Math.random());
+      
+      if (!parsed.skills || !Array.isArray(parsed.skills)) parsed.skills = [''];
+      if (!parsed.languages || !Array.isArray(parsed.languages)) parsed.languages = [''];
+      if (!parsed.certifications || !Array.isArray(parsed.certifications)) parsed.certifications = [''];
+      
+      setCvData({ ...cvData, ...parsed });
+      alert("CV successfully imported!");
+    } catch(e) {
+      console.error(e, result);
+      alert("Failed to parse the AI output into the form. Please try again or fill manually.");
+    }
+  };
+
+  const atsOptimize = async () => {
+    const jd = prompt("Paste the Job Description here. The AI will suggest keywords to add to your CV:");
+    if (!jd) return;
+    const promptText = `Analyze this Job Description and provide a comma-separated list of the 10 most critical ATS keywords and skills that I should ensure are in my CV. Output ONLY the comma-separated list. JD: ${jd}`;
+    const result = await generateWithAI(promptText);
+    if (result) {
+      alert("Suggested ATS Keywords:\n\n" + result + "\n\nConsider naturally integrating these into your Skills or Experience descriptions.");
+    }
+  };
+
+  const enhanceDescription = async (expId: string, text: string) => {
+    if (!text) { alert("Please write a short description first."); return; }
+    const promptText = `Rewrite the following job experience description to sound highly professional, action-oriented, and impactful for a CV. Emphasize achievements and use strong action verbs. Output ONLY the rewritten text, nothing else. Text: ${text}`;
+    const result = await generateWithAI(promptText);
+    if (result) {
+      updateExperience(expId, 'description', result);
+    }
+  };
 
   const updatePersonal = (field: string, value: string) => {
     setCvData({ ...cvData, personal: { ...cvData.personal, [field]: value } });
@@ -106,6 +202,12 @@ const CVMaker = () => {
   const handlePrint = () => {
     const confirmPrint = window.confirm("To save as PDF, select 'Save as PDF' in the printer destination dropdown. Would you like to proceed to print?");
     if (confirmPrint) {
+      logGeneratedCV(
+        cvData.personal.name || 'Anonymous',
+        cvData.personal.email || 'No email',
+        window.innerWidth < 1024 ? 'Mobile' : 'Desktop',
+        template
+      );
       window.print();
     }
   };
@@ -114,7 +216,7 @@ const CVMaker = () => {
     <div className="cv-page bg-white text-slate-800 shadow-2xl mx-auto flex flex-col font-sans w-[210mm] min-h-[297mm] p-[15mm]" style={{ '--cv-primary': themeColor } as any}>
       <div className="border-b-4 pb-6 mb-6 flex items-center gap-6" style={{ borderColor: themeColor }}>
         {cvData.personal.image && (
-          <img src={cvData.personal.image} alt="Profile" className="w-24 h-24 rounded-full object-cover shadow-md shrink-0" />
+          <img src={cvData.personal.image} alt="Profile" className="w-24 h-24 rounded-full object-cover object-top shadow-md shrink-0" />
         )}
         <div>
           <h1 className="text-4xl font-black uppercase tracking-tighter text-near-black">{cvData.personal.name || 'Your Name'}</h1>
@@ -217,7 +319,7 @@ const CVMaker = () => {
     <div className="cv-page bg-white text-slate-800 shadow-2xl mx-auto flex flex-col font-serif w-[210mm] min-h-[297mm] p-[15mm]">
       <div className="text-center border-b-2 border-near-black pb-8 mb-8">
         {cvData.personal.image && (
-          <img src={cvData.personal.image} alt="Profile" className="w-32 h-32 rounded-full object-cover shadow-lg mx-auto mb-6" />
+          <img src={cvData.personal.image} alt="Profile" className="w-32 h-32 rounded-full object-cover object-top shadow-lg mx-auto mb-6" />
         )}
         <h1 className="text-5xl font-bold text-near-black tracking-tight mb-2">{cvData.personal.name || 'Your Name'}</h1>
         <p className="text-lg italic text-slate-600 mb-4">{cvData.personal.title || 'Professional Title'}</p>
@@ -290,7 +392,7 @@ const CVMaker = () => {
         <div className="w-1/3 bg-energetic-orange p-8 text-white flex flex-col">
           <div className="mb-10 text-center">
             {cvData.personal.image && (
-              <img src={cvData.personal.image} alt="Profile" className="w-28 h-28 rounded-full object-cover border-4 border-white/20 mx-auto mb-6 shadow-xl" />
+              <img src={cvData.personal.image} alt="Profile" className="w-28 h-28 rounded-full object-cover object-top border-4 border-white/20 mx-auto mb-6 shadow-xl" />
             )}
             <h1 className="text-3xl font-black uppercase leading-tight">{cvData.personal.name || 'Your Name'}</h1>
             <p className="text-sm font-bold opacity-90 mt-2">{cvData.personal.title || 'Professional Title'}</p>
@@ -374,7 +476,7 @@ const CVMaker = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start mb-12 gap-8">
         <div className="flex items-center gap-6">
           {cvData.personal.image && (
-            <img src={cvData.personal.image} alt="Profile" className="w-32 h-32 rounded-xl object-cover shadow-2xl shrink-0" />
+            <img src={cvData.personal.image} alt="Profile" className="w-32 h-32 rounded-xl object-cover object-top shadow-2xl shrink-0" />
           )}
           <div>
             <h1 className="text-6xl font-black tracking-tighter leading-none mb-2">{cvData.personal.name || 'Your Name'}</h1>
@@ -454,7 +556,20 @@ const CVMaker = () => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 pt-24 pb-20 px-4 sm:px-6">
+    <div className="min-h-screen bg-slate-50 pt-24 pb-20 px-4 sm:px-6 relative">
+      <AnimatePresence>
+        {aiLoading && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-white/80 backdrop-blur-sm no-print"
+          >
+            <div className="flex flex-col items-center gap-4 text-energetic-orange">
+              <Settings className="animate-spin" size={48} />
+              <p className="font-bold uppercase tracking-widest text-sm text-near-black">AI is processing...</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="max-w-7xl mx-auto">
         {/* Mobile View Toggle */}
         <div className="lg:hidden flex mb-6 bg-white p-1 rounded-xl shadow-sm border border-slate-200">
@@ -501,29 +616,40 @@ const CVMaker = () => {
                 </div>
               </div>
 
-              {/* Customization Controls */}
-              <div className="mb-10 p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap items-center gap-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Theme</span>
-                  <input 
-                    type="color" 
-                    value={themeColor}
-                    onChange={(e) => setThemeColor(e.target.value)}
-                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
-                  />
+              <div className="mb-10 p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col md:flex-row flex-wrap md:items-center justify-between gap-6">
+                <div className="flex flex-wrap items-center gap-6">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Theme</span>
+                    <input 
+                      type="color" 
+                      value={themeColor}
+                      onChange={(e) => setThemeColor(e.target.value)}
+                      className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 w-40">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Zoom</span>
+                    <input 
+                      type="range" 
+                      min="0.4" 
+                      max="1.2" 
+                      step="0.05"
+                      value={zoom}
+                      onChange={(e) => setZoom(parseFloat(e.target.value))}
+                      className="flex-grow accent-energetic-orange"
+                    />
+                    <span className="text-[10px] font-bold text-slate-500 w-8">{Math.round(zoom * 100)}%</span>
+                  </div>
                 </div>
-                <div className="flex-grow flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Zoom</span>
-                  <input 
-                    type="range" 
-                    min="0.4" 
-                    max="1.2" 
-                    step="0.05"
-                    value={zoom}
-                    onChange={(e) => setZoom(parseFloat(e.target.value))}
-                    className="flex-grow accent-energetic-orange"
-                  />
-                  <span className="text-[10px] font-bold text-slate-500 w-8">{Math.round(zoom * 100)}%</span>
+
+                <div className="flex flex-wrap gap-2 pt-4 md:pt-0 border-t md:border-t-0 border-slate-200">
+                   <button onClick={smartImportCV} className="text-[11px] font-bold bg-energetic-orange text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-orange-600 transition-colors shadow-sm">
+                     <Cpu size={14} /> Smart Import
+                   </button>
+                   <button onClick={atsOptimize} className="text-[11px] font-bold border-2 border-energetic-orange text-energetic-orange bg-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-energetic-orange/5 transition-colors shadow-sm">
+                     <FileText size={14} /> ATS Optimize
+                   </button>
+                   <span className="text-[10px] items-center flex text-slate-400 font-bold ml-2">{aiCredits}/3 AI Credits</span>
                 </div>
               </div>
 
@@ -651,6 +777,9 @@ const CVMaker = () => {
                           value={exp.description}
                           onChange={(e) => updateExperience(exp.id, 'description', e.target.value)}
                         />
+                        <button type="button" onClick={() => enhanceDescription(exp.id, exp.description)} className="mt-3 bg-energetic-orange/10 text-energetic-orange px-3 py-1.5 rounded-md text-[10px] font-bold flex items-center gap-2 hover:bg-energetic-orange/20 transition-colors w-max">
+                          <Cpu size={12} /> Enhance with AI
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -804,17 +933,27 @@ export default function App() {
   const [lang, setLang] = useState<Language>('EN');
   const [data, setData] = useState<PortfolioData>(DEFAULT_DATA);
   const [currentPage, setCurrentPage] = useState<Page>('brand-home');
+  const [isLightMode, setIsLightMode] = useState(() => {
+    return localStorage.getItem('cvk_theme') === 'light';
+  });
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [newPostMedia, setNewPostMedia] = useState<{url: string, type: 'image' | 'video'}[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [newProjectMedia, setNewProjectMedia] = useState<{url: string, type: 'image' | 'video'}[]>([]);
-  const [dashboardTab, setDashboardTab] = useState<'content' | 'security'>('content');
+  const [dashboardTab, setDashboardTab] = useState<'content' | 'security' | 'analytics'>('content');
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [generatedCvs, setGeneratedCvs] = useState<any[]>([]);
+
+  useEffect(() => {
+    localStorage.setItem('cvk_theme', isLightMode ? 'light' : 'dark');
+  }, [isLightMode]);
 
   // Load from Firebase
   useEffect(() => {
@@ -846,7 +985,15 @@ export default function App() {
         }
       }
     });
-    return () => unsubscribe();
+
+    const unsubscribeCvs = subscribeToGeneratedCVs((cvs) => {
+      setGeneratedCvs(cvs);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeCvs();
+    };
   }, []);
 
   // Save to Firebase and localStorage
@@ -864,16 +1011,20 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPassword = data.adminPassword || 'CVk1999#';
-    if (password === correctPassword) {
+    setIsLoggingIn(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
       setIsAdmin(true);
       setShowLogin(false);
       setShowDashboard(true);
       setPassword('');
-    } else {
-      alert('Incorrect password');
+      setEmail('');
+    } catch (error: any) {
+      alert('Login failed: ' + error.message);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -1074,7 +1225,7 @@ export default function App() {
   const isBrandPage = ['brand-home', 'brand-services'].includes(currentPage);
 
   return (
-    <div className="min-h-screen font-sans bg-white">
+    <div className={`min-h-screen font-sans bg-white ${isLightMode ? 'light-mode' : ''}`}>
       {/* Navbar */}
       <nav className={`fixed top-0 w-full z-50 transition-all duration-500 no-print ${isScrolled || currentPage !== 'brand-home' ? 'bg-near-black/95 backdrop-blur-md py-4 shadow-lg border-b border-white/5' : 'bg-transparent py-8'}`}>
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
@@ -1098,6 +1249,13 @@ export default function App() {
             >
               <Globe size={16} />
               {lang === 'EN' ? 'සිංහල' : 'English'}
+            </button>
+            <button 
+              onClick={() => setIsLightMode(!isLightMode)}
+              className="flex items-center justify-center w-8 h-8 text-white hover:text-energetic-orange transition-colors border border-white/20 rounded-md"
+              title="Toggle Light/Dark Mode"
+            >
+              {isLightMode ? <Moon size={16} /> : <Sun size={16} />}
             </button>
           </div>
           
@@ -2141,6 +2299,17 @@ export default function App() {
               <h2 className="text-2xl font-bold text-center mb-8">{t.admin.login}</h2>
               <form onSubmit={handleLogin} className="space-y-6">
                 <div>
+                  <label className="block text-sm font-bold text-near-black/60 uppercase tracking-widest mb-2">Email</label>
+                  <input 
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-near-black/5 border border-near-black/10 px-4 py-3 rounded-md focus:outline-none focus:border-energetic-orange transition-colors"
+                    placeholder="admin@example.com"
+                    required
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-bold text-near-black/60 uppercase tracking-widest mb-2">{t.admin.password}</label>
                   <input 
                     type="password" 
@@ -2148,10 +2317,11 @@ export default function App() {
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-near-black/5 border border-near-black/10 px-4 py-3 rounded-md focus:outline-none focus:border-energetic-orange transition-colors"
                     placeholder="••••••••"
+                    required
                   />
                 </div>
-                <button type="submit" className="w-full bg-near-black text-white font-bold py-4 rounded-md hover:bg-near-black/90 transition-colors">
-                  {t.admin.submit}
+                <button type="submit" disabled={isLoggingIn} className="w-full bg-near-black text-white font-bold py-4 rounded-md hover:bg-near-black/90 transition-colors disabled:opacity-50">
+                  {isLoggingIn ? 'Logging in...' : t.admin.submit}
                 </button>
               </form>
             </motion.div>
@@ -2184,10 +2354,82 @@ export default function App() {
                 <div className="flex gap-2 bg-near-black/5 p-1 rounded-lg">
                   <button onClick={() => setDashboardTab('content')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${dashboardTab === 'content' ? 'bg-white shadow-sm text-near-black' : 'text-near-black/40 hover:text-near-black'}`}>Content</button>
                   <button onClick={() => setDashboardTab('security')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${dashboardTab === 'security' ? 'bg-white shadow-sm text-near-black' : 'text-near-black/40 hover:text-near-black'}`}>Security</button>
+                  <button onClick={() => setDashboardTab('analytics')} className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${dashboardTab === 'analytics' ? 'bg-white shadow-sm text-near-black' : 'text-near-black/40 hover:text-near-black'}`}>Analytics</button>
                 </div>
               </div>
 
-              {dashboardTab === 'content' ? (
+              {dashboardTab === 'analytics' && (
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-bold flex items-center gap-2">
+                       <History size={20} className="text-energetic-orange" />
+                       Generated CV Analytics
+                    </h3>
+                    <div className="bg-near-black/5 px-4 py-2 rounded-lg font-bold text-sm">
+                      Total: {generatedCvs.length}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-near-black/5 p-6 rounded-xl border border-near-black/10">
+                      <h4 className="text-xs font-bold text-near-black/50 uppercase tracking-widest mb-2">Most Popular Template</h4>
+                      <p className="text-2xl font-black text-near-black">
+                        {generatedCvs.length > 0 
+                          ? `Template ${Object.entries(generatedCvs.reduce((acc, cv) => { acc[cv.template] = (acc[cv.template] || 0) + 1; return acc; }, {})).sort((a: any, b: any) => b[1] - a[1])[0][0]}`
+                          : 'N/A'
+                        }
+                      </p>
+                    </div>
+                    <div className="bg-near-black/5 p-6 rounded-xl border border-near-black/10">
+                      <h4 className="text-xs font-bold text-near-black/50 uppercase tracking-widest mb-2">Desktop Users</h4>
+                      <p className="text-2xl font-black text-near-black">
+                        {generatedCvs.filter(cv => cv.source === 'Desktop').length}
+                      </p>
+                    </div>
+                    <div className="bg-near-black/5 p-6 rounded-xl border border-near-black/10">
+                      <h4 className="text-xs font-bold text-near-black/50 uppercase tracking-widest mb-2">Mobile Users</h4>
+                      <p className="text-2xl font-black text-near-black">
+                        {generatedCvs.filter(cv => cv.source === 'Mobile').length}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-near-black/10 rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-near-black/5 border-b border-near-black/10">
+                          <tr>
+                            <th className="px-6 py-4 text-xs font-bold text-near-black/50 uppercase tracking-widest">Date</th>
+                            <th className="px-6 py-4 text-xs font-bold text-near-black/50 uppercase tracking-widest">Name</th>
+                            <th className="px-6 py-4 text-xs font-bold text-near-black/50 uppercase tracking-widest">Email</th>
+                            <th className="px-6 py-4 text-xs font-bold text-near-black/50 uppercase tracking-widest">Template</th>
+                            <th className="px-6 py-4 text-xs font-bold text-near-black/50 uppercase tracking-widest">Source</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-near-black/5">
+                          {generatedCvs.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-6 py-8 text-center text-sm text-near-black/50">No CVs generated yet.</td>
+                            </tr>
+                          ) : (
+                            generatedCvs.map((cv) => (
+                              <tr key={cv.id} className="hover:bg-near-black/5 transition-colors">
+                                <td className="px-6 py-4 text-sm whitespace-nowrap">{new Date(cv.timestamp).toLocaleString()}</td>
+                                <td className="px-6 py-4 text-sm font-bold">{cv.name}</td>
+                                <td className="px-6 py-4 text-sm text-near-black/70">{cv.email}</td>
+                                <td className="px-6 py-4 text-sm"><span className="bg-energetic-orange/10 text-energetic-orange px-2 py-1 rounded font-bold text-xs">T{cv.template}</span></td>
+                                <td className="px-6 py-4 text-sm text-near-black/70">{cv.source}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {dashboardTab === 'content' && (
                 <div className="grid md:grid-cols-2 gap-12">
                 <div className="space-y-8">
                   <div>
@@ -2454,7 +2696,9 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {dashboardTab === 'security' && (
               <div className="max-w-md mx-auto py-12">
                   <div className="bg-near-black/5 p-8 rounded-2xl border border-near-black/5">
                     <div className="flex items-center gap-4 mb-8">

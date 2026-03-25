@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set } from 'firebase/database';
+import { getDatabase, ref, onValue, set, push } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 
 // Note: The user provided a Realtime Database URL and a Secret Key.
@@ -41,6 +41,39 @@ export const subscribeToPortfolioData = (callback: (data: any) => void) => {
     });
   } catch (error) {
     console.error("Firebase Setup Error:", error);
+    return () => {};
+  }
+};
+
+export const logGeneratedCV = async (cvName: string, email: string, source: string, template: number) => {
+  try {
+    const cvsRef = ref(db, 'generated_cvs');
+    await push(cvsRef, {
+      name: cvName || 'Unknown',
+      email: email || 'No email',
+      source,
+      template,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Firebase log CV error:", error);
+  }
+};
+
+export const subscribeToGeneratedCVs = (callback: (data: any[]) => void) => {
+  try {
+    const cvsRef = ref(db, 'generated_cvs');
+    return onValue(cvsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const arr = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        callback(arr.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+      } else {
+        callback([]);
+      }
+    });
+  } catch (error) {
+    console.error("Firebase CV fetching error:", error);
     return () => {};
   }
 };
