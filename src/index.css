@@ -10,15 +10,72 @@
 
 @layer base {
   body {
-    @apply bg-white text-near-black antialiased;
+    @apply bg-near-black text-white antialiased;
   }
+}
+
+/* Light Mode Overrides (when isLightMode is true) */
+body.light-mode {
+  background-color: #F8FAFC !important;
+}
+.light-mode .bg-near-black,
+.light-mode .bg-near-black\/95 {
+  background-color: #F8FAFC !important;
+  color: #1A1A1A !important;
+}
+.light-mode .text-white,
+.light-mode .text-white\/80,
+.light-mode .text-white\/70,
+.light-mode .text-white\/60,
+.light-mode .text-white\/40 {
+  color: #1A1A1A !important;
+}
+.light-mode .border-white\/20,
+.light-mode .border-white\/10,
+.light-mode .border-white\/5 {
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+.light-mode .bg-white\/10,
+.light-mode .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Dark Mode Overrides (for naturally light components when isLightMode is false) */
+body:not(.light-mode) .bg-white,
+body:not(.light-mode) .bg-slate-50,
+body:not(.light-mode) .bg-slate-200 {
+  background-color: #1A1A1A !important;
+}
+body:not(.light-mode) .text-near-black,
+body:not(.light-mode) .text-slate-800,
+body:not(.light-mode) .text-slate-900,
+body:not(.light-mode) .text-slate-700 {
+  color: #FFFFFF !important;
+}
+body:not(.light-mode) .text-slate-600,
+body:not(.light-mode) .text-slate-500 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+body:not(.light-mode) .border-slate-200,
+body:not(.light-mode) .border-slate-300 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Fix CV Maker in dark mode */
+body:not(.light-mode) .cv-page {
+  background-color: #FFFFFF !important; /* CV should remain white printable format */
+  color: #1A1A1A !important;
+}
+body:not(.light-mode) .cv-page .text-slate-800,
+body:not(.light-mode) .cv-page .text-near-black {
+  color: #1A1A1A !important; /* CV text stays dark */
 }
 
 @media print {
   .no-print {
     display: none !important;
   }
-  body {
+  body, body:not(.light-mode) {
     background: white !important;
     padding: 0 !important;
   }
@@ -61,61 +118,4 @@
   bottom: -12px;
   border: 2px solid var(--color-energetic-orange);
   z-index: -1;
-}
-
-/* Light Mode Overrides for Global Theme */
-.light-mode .bg-near-black {
-  background-color: #F8FAFC !important;
-  color: #1A1A1A !important;
-}
-.light-mode .text-white {
-  color: #1A1A1A !important;
-}
-.light-mode .text-near-black {
-  color: #F8FAFC !important;
-}
-.light-mode .text-white\/80 {
-  color: rgba(26, 26, 26, 0.8) !important;
-}
-.light-mode .text-white\/70 {
-  color: rgba(26, 26, 26, 0.7) !important;
-}
-.light-mode .text-white\/60 {
-  color: rgba(26, 26, 26, 0.6) !important;
-}
-.light-mode .text-white\/40 {
-  color: rgba(26, 26, 26, 0.4) !important;
-}
-.light-mode .bg-white\/10 {
-  background-color: rgba(0, 0, 0, 0.1) !important;
-}
-.light-mode .bg-white\/5 {
-  background-color: rgba(0, 0, 0, 0.05) !important;
-}
-.light-mode .border-white\/20 {
-  border-color: rgba(0, 0, 0, 0.2) !important;
-}
-.light-mode .border-white\/10 {
-  border-color: rgba(0, 0, 0, 0.1) !important;
-}
-.light-mode .border-white\/5 {
-  border-color: rgba(0, 0, 0, 0.05) !important;
-}
-.light-mode .bg-near-black\/95 {
-  background-color: rgba(248, 250, 252, 0.95) !important;
-}
-.light-mode .bg-gradient-to-r.from-near-black {
-  --tw-gradient-from: #F8FAFC;
-  --tw-gradient-to: rgba(248, 250, 252, 0);
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
-}
-.light-mode .via-near-black\/80 {
-  --tw-gradient-stops: var(--tw-gradient-from), rgba(248, 250, 252, 0.8), var(--tw-gradient-to);
-}
-.light-mode .from-near-black {
-  --tw-gradient-from: #F8FAFC;
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
-}
-.light-mode .to-near-black\/40 {
-  --tw-gradient-to: rgba(248, 250, 252, 0.4);
 }
