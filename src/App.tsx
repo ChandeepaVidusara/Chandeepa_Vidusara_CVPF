@@ -48,113 +48,6 @@ const CVMaker = () => {
   const [viewMode, setViewMode] = useState<'editor' | 'preview'>('editor');
   const [zoom, setZoom] = useState(0.75);
   const [themeColor, setThemeColor] = useState('#FF6321');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiCredits, setAiCredits] = useState(() => {
-    const today = new Date().toDateString();
-    const stored = localStorage.getItem(`cvk_ai_credits_${today}`);
-    return stored ? parseInt(stored) : 3;
-  });
-
-  const generateWithAI = async (promptText: string): Promise<string | null> => {
-    if (aiCredits <= 0) {
-      alert("Daily AI limit reached (3/3). Please try again tomorrow!");
-      return null;
-    }
-    setAiLoading(true);
-    try {
-      const apiKey = process.env.GEMINI_API_KEY || '';
-      if (!apiKey) throw new Error("Gemini API key is missing in environment variables.");
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }]
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const responseData = await response.json();
-      const textResult = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
-      
-      if (!textResult) throw new Error("Invalid response format from Gemini");
-      
-      const today = new Date().toDateString();
-      const newCredits = aiCredits - 1;
-      setAiCredits(newCredits);
-      localStorage.setItem(`cvk_ai_credits_${today}`, newCredits.toString());
-      
-      return textResult;
-    } catch (e: any) {
-      console.error(e);
-      alert("AI Generation failed. Check API key or connection. Error: " + e.message);
-      return null;
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const smartImportCV = async () => {
-    const rawText = prompt("Paste your plain text CV here (minimum 50 characters). The AI will analyze it and auto-fill the form:");
-    if (!rawText || rawText.length < 50) return;
-
-    const dataPrompt = `
-      Extract the following information from the provided CV text into a strict JSON format matching this schema exactly:
-      {
-        "personal": { "name": "", "title": "", "email": "", "phone": "", "location": "", "linkedin": "", "summary": "" },
-        "experience": [{ "company": "", "role": "", "period": "", "description": "" }],
-        "education": [{ "school": "", "degree": "", "period": "", "description": "" }],
-        "skills": ["skill1", "skill2"],
-        "languages": ["lang1"],
-        "certifications": ["cert1"]
-      }
-      If any field is missing, leave it as an empty string. Output ONLY raw JSON, do not include markdown blocks like \`\`\`json.
-      CV TEXT:
-      ${rawText}
-    `;
-
-    const result = await generateWithAI(dataPrompt);
-    if (!result) return;
-    try {
-      const cleanedResult = result.replace(/```json|```/gi, '').trim();
-      const parsed = JSON.parse(cleanedResult);
-      if (parsed.experience) parsed.experience.forEach((e: any) => e.id = Date.now().toString() + Math.random());
-      if (parsed.education) parsed.education.forEach((e: any) => e.id = Date.now().toString() + Math.random());
-      
-      if (!parsed.skills || !Array.isArray(parsed.skills)) parsed.skills = [''];
-      if (!parsed.languages || !Array.isArray(parsed.languages)) parsed.languages = [''];
-      if (!parsed.certifications || !Array.isArray(parsed.certifications)) parsed.certifications = [''];
-      
-      setCvData({ ...cvData, ...parsed });
-      alert("CV successfully imported!");
-    } catch(e) {
-      console.error(e, result);
-      alert("Failed to parse the AI output into the form. Please try again or fill manually.");
-    }
-  };
-
-  const atsOptimize = async () => {
-    const jd = prompt("Paste the Job Description here. The AI will suggest keywords to add to your CV:");
-    if (!jd) return;
-    const promptText = `Analyze this Job Description and provide a comma-separated list of the 10 most critical ATS keywords and skills that I should ensure are in my CV. Output ONLY the comma-separated list. JD: ${jd}`;
-    const result = await generateWithAI(promptText);
-    if (result) {
-      alert("Suggested ATS Keywords:\n\n" + result + "\n\nConsider naturally integrating these into your Skills or Experience descriptions.");
-    }
-  };
-
-  const enhanceDescription = async (expId: string, text: string) => {
-    if (!text) { alert("Please write a short description first."); return; }
-    const promptText = `Rewrite the following job experience description to sound highly professional, action-oriented, and impactful for a CV. Emphasize achievements and use strong action verbs. Output ONLY the rewritten text, nothing else. Text: ${text}`;
-    const result = await generateWithAI(promptText);
-    if (result) {
-      updateExperience(expId, 'description', result);
-    }
-  };
-
   const updatePersonal = (field: string, value: string) => {
     setCvData({ ...cvData, personal: { ...cvData.personal, [field]: value } });
   };
@@ -569,19 +462,6 @@ const CVMaker = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pt-24 pb-20 px-4 sm:px-6 relative">
-      <AnimatePresence>
-        {aiLoading && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-white/80 backdrop-blur-sm no-print"
-          >
-            <div className="flex flex-col items-center gap-4 text-energetic-orange">
-              <Settings className="animate-spin" size={48} />
-              <p className="font-bold uppercase tracking-widest text-sm text-near-black">AI is processing...</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
       <div className="max-w-7xl mx-auto">
         {/* Mobile View Toggle */}
         <div className="lg:hidden flex mb-6 bg-white p-1 rounded-xl shadow-sm border border-slate-200">
@@ -605,7 +485,7 @@ const CVMaker = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
           {/* Editor Side */}
-          <div className={`space-y-8 no-print ${viewMode === 'preview' ? 'hidden lg:block' : 'block'}`}>
+          <div className={`space-y-8 no-print cv-editor-area ${viewMode === 'preview' ? 'hidden lg:block' : 'block'}`}>
             <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-slate-100">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
                 <h2 className="text-2xl font-black text-near-black flex items-center gap-3">
@@ -652,16 +532,6 @@ const CVMaker = () => {
                     />
                     <span className="text-[10px] font-bold text-slate-500 w-8">{Math.round(zoom * 100)}%</span>
                   </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2 pt-4 md:pt-0 border-t md:border-t-0 border-slate-200">
-                   <button onClick={smartImportCV} className="text-[11px] font-bold bg-energetic-orange text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-orange-600 transition-colors shadow-sm">
-                     <Cpu size={14} /> Smart Import
-                   </button>
-                   <button onClick={atsOptimize} className="text-[11px] font-bold border-2 border-energetic-orange text-energetic-orange bg-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-energetic-orange/5 transition-colors shadow-sm">
-                     <FileText size={14} /> ATS Optimize
-                   </button>
-                   <span className="text-[10px] items-center flex text-slate-400 font-bold ml-2">{aiCredits}/3 AI Credits</span>
                 </div>
               </div>
 
@@ -789,9 +659,6 @@ const CVMaker = () => {
                           value={exp.description}
                           onChange={(e) => updateExperience(exp.id, 'description', e.target.value)}
                         />
-                        <button type="button" onClick={() => enhanceDescription(exp.id, exp.description)} className="mt-3 bg-energetic-orange/10 text-energetic-orange px-3 py-1.5 rounded-md text-[10px] font-bold flex items-center gap-2 hover:bg-energetic-orange/20 transition-colors w-max">
-                          <Cpu size={12} /> Enhance with AI
-                        </button>
                       </div>
                     ))}
                   </div>
