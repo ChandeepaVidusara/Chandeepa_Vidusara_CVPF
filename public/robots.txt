@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://chandeepa-vidusara.github.io/sitemap.xml

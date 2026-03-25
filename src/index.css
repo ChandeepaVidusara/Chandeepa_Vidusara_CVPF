@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Poppins", "Noto Sans Sinhala", ui-sans-serif, system-ui, sans-serif;
+  --color-deep-blue: #003366;
+  --color-energetic-orange: #FF6600;
+  --color-near-black: #1A1A1A;
+}
+
+@layer base {
+  body {
+    @apply bg-white text-near-black antialiased;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    padding: 0 !important;
+  }
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  .cv-page {
+    box-shadow: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    padding: 15mm !important;
+    page-break-after: always;
+    overflow: hidden;
+  }
+  .cv-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+}
+
+.grid-overlay {
+  background-image: radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.sharp-frame {
+  position: relative;
+}
+
+.sharp-frame::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: -12px;
+  bottom: -12px;
+  border: 2px solid var(--color-energetic-orange);
+  z-index: -1;
+}
