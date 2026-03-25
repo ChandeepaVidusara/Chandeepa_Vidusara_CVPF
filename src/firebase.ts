@@ -2,15 +2,15 @@ import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set, push } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 
-// Note: The user provided a Realtime Database URL and a Secret Key.
-// For a modern web app, we usually use a full Firebase Config.
-// We'll use the provided URL and a placeholder API key if needed.
 const firebaseConfig = {
-  databaseURL: "https://english-learning-platfor-d50c1-default-rtdb.asia-southeast1.firebasedatabase.app/",
-  // Standard Firebase SDK requires an apiKey for most operations.
-  // We'll use a placeholder if one isn't provided, but RTDB often works with just the URL if rules are open.
-  apiKey: "AIzaSyA-placeholder-key", 
+  apiKey: "AIzaSyCtgwumRbEWN6MlXENhJpEKk77Zr3Sqzn4",
+  authDomain: "english-learning-platfor-d50c1.firebaseapp.com",
+  databaseURL: "https://english-learning-platfor-d50c1-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "english-learning-platfor-d50c1",
+  storageBucket: "english-learning-platfor-d50c1.firebasestorage.app",
+  messagingSenderId: "639969840143",
+  appId: "1:639969840143:web:53541e9ae315a51fdea77a",
+  measurementId: "G-R57RJ79KS5"
 };
 
 const app = initializeApp(firebaseConfig);
